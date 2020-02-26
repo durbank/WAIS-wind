@@ -1,0 +1,9 @@
+name: wais-wind
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - pip
+  - jupyter
+  - pandas
+prefix: /home/durbank/anaconda3/envs/wais-wind
