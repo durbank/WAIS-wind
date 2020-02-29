@@ -133,3 +133,6 @@ dmypy.json
 
 # Ignore the `data` folder and all of its descendents
 data/*
+
+# Ignore .ipynb files (to avoid massive diff commits)
+.ipynb
