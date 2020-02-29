@@ -6,4 +6,7 @@ dependencies:
   - pip
   - jupyter
   - pandas
+  - matplotlib
+  - geopandas
+  - xarray
 prefix: /home/durbank/anaconda3/envs/wais-wind
