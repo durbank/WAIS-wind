@@ -9,4 +9,8 @@ dependencies:
   - matplotlib
   - geopandas
   - xarray
+  - descartes
+  - rasterio
+  - richdem
 prefix: /home/durbank/anaconda3/envs/wais-wind
+
