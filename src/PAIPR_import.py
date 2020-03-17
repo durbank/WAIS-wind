@@ -158,16 +158,54 @@ def calc_topo(dem_path):
 
 ## Exploratory testing area
 
-def topo_vals(tile_path, trace_locs):
+import rasterio as rio
+def topo_vals(tile_dir, trace_locs):
 
-    with rio.open(tile_path) as tile:
-        tile.bounds
-    tile_rd = rd.LoadGDAL(str(tile_path))
-    tile_dir = tile_path.parent
-    pts = trace_locs[trace_locs.within(tile)]
+    trace_locs = (
+        trace_locs.assign(elev=None)
+        .assign(slope=None).assign(aspect=None))
+
+    coords = (
+        [(x,y) for x, y in zip(
+            trace_locs.geometry.x, trace_locs.geometry.y)]
+    )
     
+    # Extract elevation values for all points within tile
+    tile_path = [file for file in tile_dir.glob("*dem.tif")][0]
+    src = rio.open(tile_path)
+    tile_vals = np.asarray(
+        [x[0] for x in src.sample(coords, masked=True)])
+    tile_mask = ~np.isnan(tile_vals)
+    trace_locs.elev[tile_mask] = tile_vals[tile_mask]
+    src.close()
+
+    # Extract slope values for all points within tile
+    tile_path = [file for file in tile_dir.glob("*slope.tif")][0]
+    src = rio.open(tile_path)
+    tile_vals = np.asarray(
+        [x[0] for x in src.sample(coords, masked=True)])
+    tile_mask = ~np.isnan(tile_vals)
+    trace_locs.slope[tile_mask] = tile_vals[tile_mask]
+    src.close()
+
+    # Extract aspect values for all points within tile
+    tile_path = [
+        file for file in tile_dir.glob("*aspect.tif")][0]
+    src = rio.open(tile_path)
+    tile_vals = np.asarray(
+        [x[0] for x in src.sample(coords, masked=True)])
+    tile_mask = ~np.isnan(tile_vals)
+    trace_locs.aspect[tile_mask] = tile_vals[tile_mask]
+    src.close()
+
+    return trace_locs
 
 
 
 
-trace_locs = accum_mu.sample(n=1000)
+test_dem = Path(
+    'data/REMA/tiles_8m_v1.1/26_20/26_20_8m_dem.tif')
+test = topo_vals(test_dem.parent, accum_mu.sample(n=1000))
+
+
+
