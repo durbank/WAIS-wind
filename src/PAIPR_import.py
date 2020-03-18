@@ -7,12 +7,24 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import richdem as rd
+from pathlib import Path
+import rasterio as rio
 
 # Set current working directory to root of project repo
-os.chdir("../")
+dirname=os.path.dirname
+root_path = dirname(dirname(__file__))
+os.chdir(root_path)
 
 # Function to import and concatenate PAIPR .csv files
 def import_PAIPR(input_dir):
+    """
+    Function to import PAIPR-derived accumulation data.
+    This concatenates all files within the given directory into a single pandas dataframe.
+
+    Parameters:
+    input_dir (str): Path of directory containing .csv files of PAIPR results (gamma-distributions fitted to accumulation curves). This directory can contain multiple files, which will be concatenated to a single dataframe.
+    """
     data = pd.DataFrame()
     for file in glob.glob(os.path.join(input_dir, "*.csv")):
         f_path = os.path.join(input_dir, file)
@@ -26,8 +38,6 @@ data_0 = import_PAIPR(PAIPR_dir)
 
 # Remove time series with data missing from period
 # of interest (and clip to period of interest)
-# data_old = data_0
-# data_0 = data_0[0:1000]
 traces = data_0.groupby(['Lat', 'Lon', 'elev'])
 data = data_0.assign(trace_ID = traces.ngroup())
 traces = data.groupby('trace_ID')
@@ -97,8 +107,6 @@ accum_mu.sample(n=2500).plot(column='accum')
 
 ## Import required DSM data
 
-# Import additional modules
-from pathlib import Path
 
 # Define REMA DEM directory and path to index shapefile
 REMA_dir = Path("data/REMA/")
@@ -115,14 +123,43 @@ dem_index = (
     .iloc[:,0:dem_index.shape[1]]).drop_duplicates()
 
 
+import requests
+import shutil
+
+def get_REMA(tile_idx, output_dir):
+    """
+
+    """
+
+    for idx, row in tile_idx.iterrows():
+        f_dir = output_dir.joinpath(row.tile)
+
+        if not f_dir.exists():
+            f_dir.mkdir(parents=True)
+            zip_path = f_dir.joinpath('tmp.tar.gz')
+            r = requests.get(row.fileurl, stream=True)
+            print(f"Downloading tile {f_dir.name}")
+            with open(zip_path, 'wb') as zFile:
+                for chunk in r.iter_content(
+                        chunk_size=1024*1024):
+                    if chunk:
+                        zFile.write(chunk)
+            # open(zip_path, 'wb').write(tile.content)
+            print(f"Unzipping tile {f_dir.name}")
+            shutil.unpack_archive(zip_path, f_dir)
+            os.remove(zip_path)
+        else:
+            print(f"REMA tile {f_dir.name} already exists locally, moving to next download")
 
 
-# Path of test DEM for script development
-test_dem = Path(
-    'data/REMA/tiles_8m_v1.1/26_20/26_20_8m_dem.tif')
+output_dir = Path(
+    '/home/durbank/Downloads/REMA/tiles_8m_v1.1')
+tile_index = pd.DataFrame(
+    dem_index.drop(columns='geometry')).iloc[:2]
+get_REMA(tile_index, output_dir)
 
-# import rasterio as rio
-import richdem as rd
+
+
 def calc_topo(dem_path):
     """
     Calculates slope and aspect from given DEM and saves output.
@@ -131,7 +168,10 @@ def calc_topo(dem_path):
     Parameters:
     dem_path (pathlib.PosixPath): The relative or absolute path to an input DEM file.
 
-    Dependencies: Utilizes the richdem module and the GDAL library.
+    Dependencies: 
+    richdem module
+    GDAL binaries
+    pathlib module
     """
     slope_path = Path(
         str(dem_path).replace("dem", "slope"))
@@ -156,11 +196,18 @@ def calc_topo(dem_path):
 
 
 
-## Exploratory testing area
 
-import rasterio as rio
 def topo_vals(tile_dir, trace_locs):
+    """
+    Extracts elevation, slope, and aspect values at given locations.
+    
+    Parameters:
+    tile_dir (pathlib.PosixPath): The relative or absolute path to a directory containing REMA tile DSM, slope and aspect geotiffs.
+    trace_locs (geopandas.geodataframe.GeoDataFrame): A geodataframe containing the locations at which to extract raster data. These data should have the same coordinate reference system as the raster data, with the geometries stored in a column named "geometry".
 
+    Dependencies: Requires the rasterio (as rio) module and, by extension, GDAL binaries.
+    Requires the geopandas module.
+    """
     trace_locs = (
         trace_locs.assign(elev=None)
         .assign(slope=None).assign(aspect=None))
@@ -171,7 +218,8 @@ def topo_vals(tile_dir, trace_locs):
     )
     
     # Extract elevation values for all points within tile
-    tile_path = [file for file in tile_dir.glob("*dem.tif")][0]
+    tile_path = [
+        file for file in tile_dir.glob("*dem.tif")][0]
     src = rio.open(tile_path)
     tile_vals = np.asarray(
         [x[0] for x in src.sample(coords, masked=True)])
@@ -180,7 +228,8 @@ def topo_vals(tile_dir, trace_locs):
     src.close()
 
     # Extract slope values for all points within tile
-    tile_path = [file for file in tile_dir.glob("*slope.tif")][0]
+    tile_path = [
+        file for file in tile_dir.glob("*slope.tif")][0]
     src = rio.open(tile_path)
     tile_vals = np.asarray(
         [x[0] for x in src.sample(coords, masked=True)])
