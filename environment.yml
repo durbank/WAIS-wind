@@ -1,7 +1,7 @@
 name: wais-wind
 channels:
-  - defaults
   - conda-forge
+  - defaults
 dependencies:
   - pip
   - jupyter
@@ -12,5 +12,7 @@ dependencies:
   - descartes
   - rasterio
   - richdem
+  - requests
+  - seaborn
 prefix: /home/durbank/anaconda3/envs/wais-wind
 
