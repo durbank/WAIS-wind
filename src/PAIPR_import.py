@@ -150,12 +150,13 @@ def get_REMA(tile_idx, output_dir):
             os.remove(zip_path)
         else:
             print(f"REMA tile {f_dir.name} already exists locally, moving to next download")
+    print("All requested files downloaded")
 
 
 output_dir = Path(
     '/home/durbank/Downloads/REMA/tiles_8m_v1.1')
 tile_index = pd.DataFrame(
-    dem_index.drop(columns='geometry')).iloc[:2]
+    dem_index.drop(columns='geometry')).iloc[:3]
 get_REMA(tile_index, output_dir)
 
 
