@@ -14,5 +14,7 @@ dependencies:
   - richdem
   - requests
   - seaborn
+  - netcdf4
+  - cdsapi
 prefix: /home/durbank/anaconda3/envs/wais-wind
 
