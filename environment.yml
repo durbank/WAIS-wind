@@ -16,5 +16,8 @@ dependencies:
   - seaborn
   - netcdf4
   - cdsapi
+  - geoviews
+  - libpysal
+  - mgwr
 prefix: /home/durbank/anaconda3/envs/wais-wind
 
