@@ -8,7 +8,7 @@
 # **Team members**
 # 
 # - Durban Keeler (u1046484): durban.keeler@utah.edu
-# - Eric Johnson (u0929154): ericscottjohnson1@gmail.com (u0929154@utah.edu)
+# - Eric Johnson (u0929154@utah.edu)
 # %% [markdown]
 # ## Background and motivation
 # 
