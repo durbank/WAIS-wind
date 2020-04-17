@@ -7,6 +7,8 @@ import geopandas as gpd
 from pathlib import Path
 import time
 from myModule import *
+import statsmodels.api as SM
+import statsmodels.formula.api as sm
 
 # Import PAIPR-generated data
 PAIPR_dir = ROOT_DIR.joinpath('data/gamma_20111109')
@@ -48,27 +50,49 @@ accum_trace = accum_trace.to_crs(ant_outline.crs)
 
 
 
+# Load ERA wind vectors
+ERA_path = ROOT_DIR.joinpath(
+    'data/downscaling_data_qc.npy')
+ERA_raw = pd.DataFrame(
+    np.load(str(ERA_path), allow_pickle=True))
+
+# df for mean wind vectors
+wind_mu = pd.DataFrame(
+    {'trace_ID': ERA_raw.iloc[:,0], 
+    'wind_u': ERA_raw.iloc[:,7].apply(lambda x: np.mean(x)), 
+    'wind_v': ERA_raw.iloc[:,8].apply(lambda x: np.mean(x))})
+
+# Add ERA data to main df
+accum_trace = accum_trace.merge(wind_mu, on='trace_ID')
 
 
-# ERA_path = ROOT_DIR.joinpath(
-#     'data/downscaling_data_qc.npy')
-# ERA_data = pd.DataFrame(np.load(ERA_path, allow_pickle=True))
 
 
+## Load R-generated slope data and add to dataframe
+R_long = pd.read_csv(
+    ROOT_DIR.joinpath('data/R-trends/accum.csv')).drop(
+        ['accum_mu', 'elev'], axis='columns')
+R_groups = R_long.groupby('trace_ID')
+R_sites = R_groups.mean()[[
+    'Easting', 'Northing', 'elev.REMA', 'slope', 'aspect']
+    ].rename(columns={'elev.REMA': 'elev_REMA'})
+R_gdf = gpd.GeoDataFrame(
+    R_sites, 
+    geometry=gpd.points_from_xy(R_sites.Easting, 
+    R_sites.Northing), crs='EPSG:3031').drop(
+        ['Easting', 'Northing'], axis='columns')
 
-
-
-
-
+# Join R-topo data to main gdf
+R_gdf['geometry'] = R_gdf.buffer(1)
+accum_trace = gpd.sjoin(
+    accum_trace, R_gdf, how='inner', op='within').drop(
+        'index_right', axis='columns')
 
 ## Estimate time series regressions
 
-import statsmodels.api as SM
-import statsmodels.formula.api as sm
-
-# # Simple polyfit model
-# lin_coeffs = np.polyfit(accum.index, accum, 1)
-# beta_yr = pd.Series(lin_coeffs[0], index=accum.columns)
+# Simple polyfit model
+lin_coeffs = np.polyfit(accum.index, accum, 1)
+beta_yr = pd.Series(lin_coeffs[0], index=accum.columns)
 
 # Preallocate arrays for linear regression
 lm_data = accum.transpose()
@@ -78,37 +102,37 @@ std_err = np.zeros(lm_data.shape[0])
 p_val = np.zeros(lm_data.shape[0])
 R2 = np.zeros(lm_data.shape[0])
 
-# # Full stats (with diagnostics) OLS model
-# tic = time.perf_counter()
+# Full stats (with diagnostics) OLS model
+tic = time.perf_counter()
 
-# for i in range(lm_data.shape[0]):
-#     X = SM.add_constant(lm_data.columns)
-#     y = lm_data.iloc[i]
-#     model = SM.OLS(y, X)
-#     results = model.fit()
-#     coeff[i] = results.params[1]
-#     std_err[i] = results.bse[1]
-#     p_val[i] = results.pvalues[1]
-#     R2[i] = results.rsquared
-# toc = time.perf_counter()
-# print(f"Execution time of OLS: {toc-tic}s")
+for i in range(lm_data.shape[0]):
+    X = SM.add_constant(lm_data.columns)
+    y = lm_data.iloc[i]
+    model = SM.OLS(y, X)
+    results = model.fit()
+    coeff[i] = results.params[1]
+    std_err[i] = results.bse[1]
+    p_val[i] = results.pvalues[1]
+    R2[i] = results.rsquared
+toc = time.perf_counter()
+print(f"Execution time of OLS: {toc-tic}s")
 
 
 
-# # Full stats (with diagnostics) WLS model
-# tic = time.perf_counter()
-# for i in range(lm_data.shape[0]):
-#     X = SM.add_constant(lm_data.columns)
-#     y = lm_data.iloc[i]
-#     w = 1/(std_data.iloc[i] ** 2)
-#     model = SM.WLS(y, X, weights=w)
-#     results = model.fit()
-#     coeff[i] = results.params[1]
-#     std_err[i] = results.bse[1]
-#     p_val[i] = results.pvalues[1]
-#     R2[i] = results.rsquared
-# toc = time.perf_counter()
-# print(f"Execution time of WLS: {toc-tic}s")
+# Full stats (with diagnostics) WLS model
+tic = time.perf_counter()
+for i in range(lm_data.shape[0]):
+    X = SM.add_constant(lm_data.columns)
+    y = lm_data.iloc[i]
+    w = 1/(std_data.iloc[i] ** 2)
+    model = SM.WLS(y, X, weights=w)
+    results = model.fit()
+    coeff[i] = results.params[1]
+    std_err[i] = results.bse[1]
+    p_val[i] = results.pvalues[1]
+    R2[i] = results.rsquared
+toc = time.perf_counter()
+print(f"Execution time of WLS: {toc-tic}s")
 
 
 
@@ -126,14 +150,6 @@ for i in range(lm_data.shape[0]):
 toc = time.perf_counter()
 print(f"Execution time of RLS: {toc-tic} s")
 
-# import matplotlib.pyplot as plt
-# idx = np.arange(0, len(coeff), 100)
-# plt.scatter(idx, coeff[idx], color='blue', label='OLS')
-# plt.scatter(idx, coeff_w[idx], color='red', label='WLS')
-# plt.scatter(idx, coeff_r[idx], color='purple', label='RLS')
-# plt.legend(loc='best')
-# plt.show()
-
 # Add regression results to gdf
 accum_trace['trnd'] = coeff
 accum_trace['p_val'] = p_val
@@ -148,28 +164,30 @@ accum_df['East'] = accum_trace.geometry.x
 accum_df['North'] = accum_trace.geometry.y
 
 # Diagnostic summary statistics
-import seaborn as sns
+accum_df.describe()
 
-# accum_df.describe()
+# import seaborn as sns
 # sns.pairplot(
 #     accum_df[['accum', 'East', 'North', 'trnd', 'trnd_perc']]
 #     .sample(100), diag_kind='kde')
 
 # Large scale linear models
 accum_lm = sm.ols(
-    formula="accum ~ East + North", 
+    formula="accum ~ East + North + slope + wind_u + wind_v", 
     data=accum_df).fit()
-print(accum_lm.summary())
+accum_lm.summary()
 
 trend_lm_abs = sm.ols(
-    formula='trnd ~ East + North + accum', 
+    formula='trnd ~ East + North + accum + slope + aspect + wind_u + wind_v', 
     data=accum_df).fit()
-print(trend_lm_abs.summary())
+trend_lm_abs.summary()
 
 trend_lm_rel = sm.ols(
-    formula='trnd_perc ~ East + North + accum', 
+    formula='trnd_perc ~ East + North + accum + slope + aspect + wind_u + wind_v', 
     data=accum_df).fit()
-print(trend_lm_rel.summary())
+trend_lm_rel.summary()
+
+
 
 ## Geographically weighted regression
 from mgwr.sel_bw import Sel_BW
