@@ -19,5 +19,7 @@ dependencies:
   - geoviews
   - libpysal
   - mgwr
+  - geopy
+  - utm
 prefix: /home/durbank/anaconda3/envs/wais-wind
 
